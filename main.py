@@ -1,96 +1,110 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import os
 from openai import OpenAI
-from fastapi.middleware.cors import CORSMiddleware
 
-# =========================
-# INIT APP
-# =========================
+# ==========================
+# CONFIG
+# ==========================
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 app = FastAPI()
 
-# =========================
-# CORS (IMPORTANTE)
-# =========================
+# CORS (MUY IMPORTANTE)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # en producción luego lo limitamos
+    allow_origins=["*"],  # luego se puede restringir
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# =========================
-# VALIDAR API KEY (NO ROMPE APP)
-# =========================
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
-if not OPENAI_API_KEY:
-    print("⚠️ WARNING: OPENAI_API_KEY no configurada")
-
-# Inicializar cliente SOLO si hay key
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-
-# =========================
-# MODELO DE DATOS
-# =========================
-class RequestData(BaseModel):
+# ==========================
+# MODELOS
+# ==========================
+class AnalyzeRequest(BaseModel):
+    email: str
     username: str
     platform: str
 
-# =========================
-# ENDPOINT TEST
-# =========================
-@app.get("/")
-def root():
-    return {"status": "Backend funcionando"}
+class ChatRequest(BaseModel):
+    message: str
 
-# =========================
-# ENDPOINT ANALYZE
-# =========================
+# ==========================
+# ANALYZE (MONETIZADO)
+# ==========================
 @app.post("/analyze")
-def analyze(data: RequestData):
+def analyze(data: AnalyzeRequest):
+
     try:
-        # Si no hay API key → no rompe backend
-        if not client:
-            return {
-                "error": "API Key no configurada en el servidor"
-            }
-
         prompt = f"""
-        Analiza el perfil de {data.platform} del usuario {data.username}.
-
+        Analiza el perfil de {data.platform} con usuario {data.username}.
+        
         Devuelve:
-
-        1. Puntos fuertes
-        2. Puntos débiles
-        3. Estrategia de crecimiento
-        4. Ideas virales
-        5. Cómo monetizar
-
-        Responde claro, directo y accionable.
+        - fallos claros
+        - mejoras directas
+        - ideas para monetizar
+        - tono práctico
         """
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": "Eres experto en crecimiento de redes sociales, viralidad y monetización."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "system", "content": "Eres un experto en crecimiento de redes sociales y monetización"},
+                {"role": "user", "content": prompt}
             ],
             temperature=0.7
         )
 
+        result = response.choices[0].message.content
+
+        # ⚠️ SIMULACIÓN PAYWALL (luego se conecta a BD)
+        if "test" in data.username:
+            return {
+                "paywall": True
+            }
+
         return {
-            "result": response.choices[0].message.content
+            "result": result
         }
 
     except Exception as e:
         return {
             "error": str(e)
         }
+
+# ==========================
+# CHAT JARVIS (VOZ)
+# ==========================
+@app.post("/chat")
+def chat(data: ChatRequest):
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres Jarvis, un asistente inteligente, directo y útil para ganar dinero con IA"},
+                {"role": "user", "content": data.message}
+            ],
+            temperature=0.7
+        )
+
+        reply = response.choices[0].message.content
+
+        return {
+            "reply": reply
+        }
+
+    except Exception as e:
+        return {
+            "reply": "Error conectando con IA",
+            "error": str(e)
+        }
+
+# ==========================
+# ROOT TEST
+# ==========================
+@app.get("/")
+def root():
+    return {"status": "ok"}
