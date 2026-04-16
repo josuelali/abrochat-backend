@@ -4,10 +4,14 @@ import os
 from openai import OpenAI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Inicializar app
+# =========================
+# INIT APP
+# =========================
 app = FastAPI()
 
-# CORS (IMPORTANTE para que tu frontend funcione)
+# =========================
+# CORS (IMPORTANTE)
+# =========================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # en producción luego lo limitamos
@@ -16,36 +20,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Cliente OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# =========================
+# VALIDAR API KEY (NO ROMPE APP)
+# =========================
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-# Modelo de datos
+if not OPENAI_API_KEY:
+    print("⚠️ WARNING: OPENAI_API_KEY no configurada")
+
+# Inicializar cliente SOLO si hay key
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+# =========================
+# MODELO DE DATOS
+# =========================
 class RequestData(BaseModel):
     username: str
     platform: str
 
-# Endpoint principal
+# =========================
+# ENDPOINT TEST
+# =========================
+@app.get("/")
+def root():
+    return {"status": "Backend funcionando"}
+
+# =========================
+# ENDPOINT ANALYZE
+# =========================
 @app.post("/analyze")
 def analyze(data: RequestData):
     try:
+        # Si no hay API key → no rompe backend
+        if not client:
+            return {
+                "error": "API Key no configurada en el servidor"
+            }
+
         prompt = f"""
         Analiza el perfil de {data.platform} del usuario {data.username}.
 
-        Dame:
-        - Puntos fuertes
-        - Puntos débiles
-        - Estrategia para crecer
-        - Ideas virales
-        - Cómo monetizar
+        Devuelve:
 
-        Responde de forma clara, estructurada y accionable.
+        1. Puntos fuertes
+        2. Puntos débiles
+        3. Estrategia de crecimiento
+        4. Ideas virales
+        5. Cómo monetizar
+
+        Responde claro, directo y accionable.
         """
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Eres un experto en crecimiento de redes sociales y monetización."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "Eres experto en crecimiento de redes sociales, viralidad y monetización."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
             ],
             temperature=0.7
         )
@@ -58,8 +94,3 @@ def analyze(data: RequestData):
         return {
             "error": str(e)
         }
-
-# Endpoint test
-@app.get("/")
-def root():
-    return {"status": "Backend funcionando"}
