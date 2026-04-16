@@ -1,52 +1,43 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from openai import OpenAI
+import openai
 import os
 
 app = FastAPI()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class RequestData(BaseModel):
     username: str
     platform: str
 
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
 @app.post("/analyze")
 def analyze(data: RequestData):
-    
-    prompt = f"""
-    Analiza el perfil de {data.username} en {data.platform}.
+    try:
+        prompt = f"""
+        Analiza el perfil de {data.username} en {data.platform}.
 
-    Devuelve:
+        Devuelve:
+        - errores
+        - mejoras
+        - ideas virales
+        - hooks
+        - propuesta de sistema
+        """
 
-    1. ERRORES PRINCIPALES
-    - 3 fallos claros
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres experto en crecimiento en redes sociales."},
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-    2. MEJORAS INMEDIATAS
-    - bio
-    - contenido
-    - estrategia
+        return {"result": response["choices"][0]["message"]["content"]}
 
-    3. IDEAS VIRALES
-    - 5 ideas concretas
-
-    4. HOOKS
-    - 5 frases virales
-
-    5. PROPUESTA DE SISTEMA
-    - cómo conectar Instagram + TikTok + YouTube
-    - embudo básico
-
-    6. PROPUESTA PREMIUM
-    - ofrecer implementación completa del sistema
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Eres un experto en crecimiento de redes sociales y monetización online."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-
-    return {"result": response.choices[0].message.content}
+    except Exception as e:
+        return {"error": str(e)}
